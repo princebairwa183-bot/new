@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEON VIPER — Arcade Snake</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0e14;
+    --bg-deep:#050709;
+    --cyan:#00fff2;
+    --magenta:#ff2e88;
+    --amber:#ffb000;
+    --text:#dce8ee;
+    --dim:#5a6b78;
+    --cab:#141a24;
+    --cab-edge:#232d3a;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{
+    background:var(--bg-deep);
+    color:var(--text);
+    font-family:'JetBrains Mono', monospace;
+    min-height:100vh;
+    overflow-x:hidden;
+  }
+  body{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:28px 16px 60px;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0,255,242,0.08), transparent),
+      radial-gradient(ellipse 60% 40% at 50% 100%, rgba(255,46,136,0.06), transparent),
+      var(--bg-deep);
+  }
+
+  /* CRT scanline overlay across whole page */
+  body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.025) 0px,
+      rgba(255,255,255,0.025) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    z-index:50;
+    mix-blend-mode:overlay;
+  }
+
+  .marquee{
+    text-align:center;
+    margin-bottom:22px;
+    position:relative;
+  }
+  .eyebrow{
+    font-family:'Press Start 2P', monospace;
+    font-size:9px;
+    letter-spacing:4px;
+    color:var(--amber);
+    text-shadow:0 0 8px rgba(255,176,0,0.6);
+    margin-bottom:10px;
+  }
+  h1{
+    font-family:'Press Start 2P', monospace;
+    font-size:clamp(24px, 6vw, 46px);
+    letter-spacing:2px;
+    color:var(--cyan);
+    text-shadow:
+      0 0 6px rgba(0,255,242,0.8),
+      0 0 22px rgba(0,255,242,0.45),
+      0 0 44px rgba(0,255,242,0.25);
+    animation:flicker 4.5s infinite;
+  }
+  @keyframes flicker{
+    0%,96%,100%{ opacity:1; }
+    97%{ opacity:0.82; }
+    98%{ opacity:1; }
+    99%{ opacity:0.9; }
+  }
+  .tagline{
+    font-size:12px;
+    color:var(--dim);
+    margin-top:12px;
+    letter-spacing:1px;
+  }
+
+  /* Arcade cabinet frame */
+  .cabinet{
+    background:linear-gradient(180deg, var(--cab), var(--bg));
+    border:2px solid var(--cab-edge);
+    border-radius:18px;
+    padding:18px;
+    box-shadow:
+      0 0 0 1px rgba(0,255,242,0.08),
+      0 20px 60px rgba(0,0,0,0.6),
+      inset 0 1px 0 rgba(255,255,255,0.04);
+    position:relative;
+    max-width:560px;
+    width:100%;
+  }
+  .cabinet::before{
+    content:"";
+    position:absolute;
+    top:-1px; left:-1px; right:-1px; bottom:-1px;
+    border-radius:19px;
+    padding:1px;
+    background:linear-gradient(135deg, rgba(0,255,242,0.25), rgba(255,46,136,0.15), transparent 60%);
+    -webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events:none;
+  }
+
+  .hud{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:0 4px 14px;
+    font-family:'Press Start 2P', monospace;
+    font-size:11px;
+  }
+  .hud .stat-label{ color:var(--dim); font-size:9px; display:block; margin-bottom:4px;}
+  .hud .score-val{ color:var(--cyan); text-shadow:0 0 8px rgba(0,255,242,0.7);}
+  .hud .best-val{ color:var(--amber); text-shadow:0 0 8px rgba(255,176,0,0.7);}
+  .hud > div:last-child{ text-align:right; }
+
+  .screen-wrap{
+    position:relative;
+    border-radius:8px;
+    overflow:hidden;
+    border:3px solid #000;
+    box-shadow:
+      inset 0 0 40px rgba(0,255,242,0.08),
+      0 0 30px rgba(0,0,0,0.8);
+    background:#020604;
+  }
+  canvas{
+    display:block;
+    width:100%;
+    height:auto;
+    image-rendering:pixelated;
+    background:#020604;
+  }
+
+  .screen-wrap::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0.18) 0px,
+      rgba(0,0,0,0.18) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+  }
+
+  .overlay-msg{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    background:rgba(2,6,4,0.86);
+    text-align:center;
+    padding:20px;
+    z-index:5;
+  }
+  .overlay-msg.hidden{ display:none; }
+  .overlay-title{
+    font-family:'Press Start 2P', monospace;
+    font-size:clamp(16px,4.2vw,26px);
+    color:var(--magenta);
+    text-shadow:0 0 10px rgba(255,46,136,0.8), 0 0 30px rgba(255,46,136,0.4);
+  }
+  .overlay-sub{
+    font-size:12px;
+    color:var(--text);
+    max-width:340px;
+    line-height:1.6;
+  }
+  .overlay-sub b{ color:var(--cyan); }
+  .btn{
+    font-family:'Press Start 2P', monospace;
+    font-size:11px;
+    letter-spacing:1px;
+    padding:14px 22px;
+    background:transparent;
+    border:2px solid var(--cyan);
+    color:var(--cyan);
+    cursor:pointer;
+    border-radius:4px;
+    transition:all .15s ease;
+    text-shadow:0 0 6px rgba(0,255,242,0.6);
+  }
+  .btn:hover{
+    background:var(--cyan);
+    color:#020604;
+    box-shadow:0 0 24px rgba(0,255,242,0.6);
+  }
+  .btn:active{ transform:scale(0.97); }
+  .btn:focus-visible{ outline:2px solid var(--amber); outline-offset:3px; }
+
+  .controls-hint{
+    display:flex;
+    justify-content:center;
+    gap:18px;
+    margin-top:18px;
+    flex-wrap:wrap;
+    font-size:11px;
+    color:var(--dim);
+  }
+  .controls-hint span b{ color:var(--text); }
+
+  .dpad{
+    display:none;
+    grid-template-columns:repeat(3, 54px);
+    grid-template-rows:repeat(3, 54px);
+    gap:6px;
+    margin-top:22px;
+    justify-content:center;
+  }
+  .dpad button{
+    background:var(--cab);
+    border:1px solid var(--cab-edge);
+    color:var(--cyan);
+    font-size:18px;
+    border-radius:8px;
+    box-shadow:0 3px 0 #000, 0 0 10px rgba(0,255,242,0.15);
+  }
+  .dpad button:active{ transform:translateY(2px); box-shadow:0 1px 0 #000; }
+  #dp-up{ grid-column:2; grid-row:1; }
+  #dp-left{ grid-column:1; grid-row:2; }
+  #dp-right{ grid-column:3; grid-row:2; }
+  #dp-down{ grid-column:2; grid-row:3; }
+
+  @media (max-width: 560px){
+    .dpad{ display:grid; }
+  }
+
+  footer{
+    margin-top:34px;
+    font-size:10px;
+    color:var(--dim);
+    letter-spacing:1px;
+    text-align:center;
+  }
+  footer span{ color:var(--amber); }
+
+  @media (prefers-reduced-motion: reduce){
+    h1{ animation:none; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="marquee">
+    <div class="eyebrow">◆ ARCADE ZONE ◆</div>
+    <h1>NEON VIPER</h1>
+    <p class="tagline">khaate raho, badhte raho, khud se mat takrao</p>
+  </div>
+
+  <div class="cabinet">
+    <div class="hud">
+      <div>
+        <span class="stat-label">SCORE</span>
+        <span class="score-val" id="score">000</span>
+      </div>
+      <div>
+        <span class="stat-label">BEST</span>
+        <span class="best-val" id="best">000</span>
+      </div>
+    </div>
+
+    <div class="screen-wrap">
+      <canvas id="game" width="400" height="400"></canvas>
+
+      <div class="overlay-msg" id="overlay">
+        <div class="overlay-title">NEON VIPER</div>
+        <p class="overlay-sub">Arrow keys ya WASD se control karein.<br>Har <b>●</b> khaane par snake badhega aur score +10 hoga.<br>Deewaar ya khud se takraye toh game over.</p>
+        <button class="btn" id="startBtn">START GAME</button>
+      </div>
+    </div>
+
+    <div class="dpad" id="dpad">
+      <button id="dp-up">▲</button>
+      <button id="dp-left">◀</button>
+      <button id="dp-right">▶</button>
+      <button id="dp-down">▼</button>
+    </div>
+  </div>
+
+  <div class="controls-hint">
+    <span><b>↑↓←→</b> ya <b>WASD</b> — move</span>
+    <span><b>SPACE</b> — pause / resume</span>
+  </div>
+
+  <footer>PRESS START TO PLAY &nbsp;<span>♥</span>&nbsp; MADE WITH CLAUDE</footer>
+
+<script>
+(function(){
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const GRID = 20;
+  const CELLS = canvas.width / GRID; // 20x20
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+  const overlay = document.getElementById('overlay');
+  const startBtn = document.getElementById('startBtn');
+
+  let snake, dir, nextDir, food, score, best, loopId, running, paused, speed;
+
+  const COLORS = {
+    bg: '#020604',
+    grid: 'rgba(0,255,242,0.04)',
+    snakeHead: '#00fff2',
+    snakeBody: '#0fb8a8',
+    food: '#ff2e88',
+    foodGlow: 'rgba(255,46,136,0.5)'
+  };
+
+  best = parseInt(localStorage.getItem('neonViperBest') || '0', 10);
+  bestEl.textContent = String(best).padStart(3,'0');
+
+  function init(){
+    snake = [{x:9,y:10},{x:8,y:10},{x:7,y:10}];
+    dir = {x:1,y:0};
+    nextDir = {x:1,y:0};
+    score = 0;
+    speed = 130;
+    paused = false;
+    placeFood();
+    scoreEl.textContent = '000';
+    draw();
+  }
+
+  function placeFood(){
+    let ok = false;
+    while(!ok){
+      food = { x: Math.floor(Math.random()*CELLS), y: Math.floor(Math.random()*CELLS) };
+      ok = !snake.some(s => s.x === food.x && s.y === food.y);
+    }
+  }
+
+  function drawCell(x,y,color,glow){
+    ctx.save();
+    if(glow){
+      ctx.shadowColor = glow;
+      ctx.shadowBlur = 12;
+    }
+    ctx.fillStyle = color;
+    const pad = 2;
+    ctx.fillRect(x*GRID+pad, y*GRID+pad, GRID-pad*2, GRID-pad*2);
+    ctx.restore();
+  }
+
+  function draw(){
+    ctx.fillStyle = COLORS.bg;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    ctx.strokeStyle = COLORS.grid;
+    ctx.lineWidth = 1;
+    for(let i=0;i<=CELLS;i++){
+      ctx.beginPath();
+      ctx.moveTo(i*GRID,0); ctx.lineTo(i*GRID,canvas.height);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0,i*GRID); ctx.lineTo(canvas.width,i*GRID);
+      ctx.stroke();
+    }
+
+    drawCell(food.x, food.y, COLORS.food, COLORS.foodGlow);
+
+    snake.forEach((seg, i) => {
+      drawCell(seg.x, seg.y, i===0 ? COLORS.snakeHead : COLORS.snakeBody, i===0 ? 'rgba(0,255,242,0.6)' : null);
+    });
+  }
+
+  function step(){
+    if(paused) return;
+    dir = nextDir;
+    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+    if(head.x < 0 || head.y < 0 || head.x >= CELLS || head.y >= CELLS || snake.some(s => s.x===head.x && s.y===head.y)){
+      gameOver();
+      return;
+    }
+
+    snake.unshift(head);
+
+    if(head.x === food.x && head.y === food.y){
+      score += 10;
+      scoreEl.textContent = String(score).padStart(3,'0');
+      placeFood();
+      if(speed > 60 && score % 50 === 0){ speed -= 6; resetLoop(); }
+    } else {
+      snake.pop();
+    }
+
+    draw();
+  }
+
+  function resetLoop(){
+    clearInterval(loopId);
+    loopId = setInterval(step, speed);
+  }
+
+  function gameOver(){
+    running = false;
+    clearInterval(loopId);
+    if(score > best){
+      best = score;
+      localStorage.setItem('neonViperBest', String(best));
+      bestEl.textContent = String(best).padStart(3,'0');
+    }
+    overlay.classList.remove('hidden');
+    overlay.querySelector('.overlay-title').textContent = 'GAME OVER';
+    overlay.querySelector('.overlay-sub').innerHTML = `Score: <b>${score}</b> &nbsp;|&nbsp; Best: <b>${best}</b><br>Phir se try karein!`;
+    startBtn.textContent = 'PLAY AGAIN';
+  }
+
+  function startGame(){
+    overlay.classList.add('hidden');
+    init();
+    running = true;
+    resetLoop();
+  }
+
+  startBtn.addEventListener('click', startGame);
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if(k === ' '){
+      if(running){ paused = !paused; }
+      e.preventDefault();
+      return;
+    }
+    if(!running) return;
+    if((k==='arrowup'||k==='w') && dir.y===0){ nextDir={x:0,y:-1}; }
+    else if((k==='arrowdown'||k==='s') && dir.y===0){ nextDir={x:0,y:1}; }
+    else if((k==='arrowleft'||k==='a') && dir.x===0){ nextDir={x:-1,y:0}; }
+    else if((k==='arrowright'||k==='d') && dir.x===0){ nextDir={x:1,y:0}; }
+    if(['arrowup','arrowdown','arrowleft','arrowright'].includes(k)) e.preventDefault();
+  });
+
+  // touch d-pad
+  function bindDpad(id, dx, dy){
+    document.getElementById(id).addEventListener('click', () => {
+      if(!running) return;
+      if(dx !== 0 && dir.x === 0){ nextDir = {x:dx,y:0}; }
+      if(dy !== 0 && dir.y === 0){ nextDir = {x:0,y:dy}; }
+    });
+  }
+  bindDpad('dp-up',0,-1);
+  bindDpad('dp-down',0,1);
+  bindDpad('dp-left',-1,0);
+  bindDpad('dp-right',1,0);
+
+  // initial static screen behind overlay
+  snake = [{x:9,y:10},{x:8,y:10},{x:7,y:10}];
+  food = {x:15,y:10};
+  draw();
+})();
+</script>
+</body>
+</html>
